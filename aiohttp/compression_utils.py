@@ -24,9 +24,9 @@ except ImportError:
 
 try:
     if sys.version_info >= (3, 14):
-        from compression.zstd import ZstdDecompressor  # noqa: I900
+        from compression.zstd import decompress as zstd_decompress, ZstdDecompressor  # noqa: I900
     else:  # TODO(PY314): Remove mentions of backports.zstd across codebase
-        from backports.zstd import ZstdDecompressor
+        from backports.zstd import decompress as zstd_decompress, ZstdDecompressor
 
     HAS_ZSTD = True
 except ImportError:
@@ -342,7 +342,8 @@ class ZSTDDecompressor(DecompressionBaseHandler):
             if max_length == ZLIB_MAX_LENGTH_UNLIMITED
             else max_length
         )
-        return self._obj.decompress(data, zstd_max_length)
+        # Use module-level decompress() to handle multiple Zstandard frames
+        return zstd_decompress(data, options=zstd.DecompressionParameter(max_length=zstd_max_length))
 
     def flush(self) -> bytes:
         return b""
