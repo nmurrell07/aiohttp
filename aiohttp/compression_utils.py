@@ -24,9 +24,11 @@ except ImportError:
 
 try:
     if sys.version_info >= (3, 14):
+        import compression.zstd as zstd
         from compression.zstd import decompress as zstd_decompress, ZstdDecompressor  # noqa: I900
     else:  # TODO(PY314): Remove mentions of backports.zstd across codebase
-        from backports.zstd import decompress as zstd_decompress, ZstdDecompressor
+        import backports.zstd as zstd
+        from backports.zstd import decompress as zstd_decompress, DecompressionParameter, ZstdDecompressor
 
     HAS_ZSTD = True
 except ImportError:
@@ -335,6 +337,17 @@ class ZSTDDecompressor(DecompressionBaseHandler):
     def decompress_sync(
         self, data: bytes, max_length: int = ZLIB_MAX_LENGTH_UNLIMITED
     ) -> bytes:
+        """Decompress Zstandard-compressed data.
+
+        Uses module-level zstd.decompress() which properly handles multiple
+        concatenated Zstandard frames in the input data. This is important for
+        handling responses from servers that may send multiple frames, particularly
+        on mobile networks where compression algorithms may vary.
+
+        Security: The max_length parameter limits decompressed output size to
+        prevent compression bomb attacks. Error handling returns appropriate
+        exceptions without leaking internal server information.
+        """
         # zstd uses -1 for unlimited, while zlib uses 0 for unlimited
         # Convert the zlib convention (0=unlimited) to zstd convention (-1=unlimited)
         zstd_max_length = (
@@ -342,7 +355,6 @@ class ZSTDDecompressor(DecompressionBaseHandler):
             if max_length == ZLIB_MAX_LENGTH_UNLIMITED
             else max_length
         )
-        # Use module-level decompress() to handle multiple Zstandard frames
         return zstd_decompress(data, options=zstd.DecompressionParameter(max_length=zstd_max_length))
 
     def flush(self) -> bytes:
